@@ -234,4 +234,74 @@ class Authorize extends Acl
     {
         return $this->_auth;
     }
+
+    /* 
+    * Checks if the current user is exactly the same role as the
+    * one that is passed
+    */
+    public function is($role = 'guest')
+    {
+        $user = $this->get_user();
+        $auth = $this->auth();
+
+        // Check for guest role
+        if ($role == $this->_config['guest_role'] && ! $auth->logged_in())
+        {
+            return true;
+        }
+
+        return ($auth->logged_in() && $user->role == $role);
+    }
+
+    /* 
+    * Checks if the current user is allowed to do 
+    * what the tested role allows AND what it extends
+    */
+    public function grants($role = 'guest')
+    {
+        $auth = $this->auth();
+
+        if ($role == $this->_config['guest_role'] && ! $auth->logged_in())
+        {
+            return true;
+        }
+
+        $user = $this->get_user();
+        $user_role = isset($user->role)? $user->role : false;
+
+        if (!$user_role) return false; 
+        
+        $roles = $this->_config['roles'];
+
+        if ( ! isset($roles[$user_role]))
+        {
+            return false;
+        }
+
+        $allowed = [];
+        $allowed = $this->_recursive_roles($roles, $roles[$user_role]);
+        $allowed = array_merge(array_unique($allowed), [$user_role]);
+
+        return in_array($role, $allowed);
+    }
+
+    // Helper function for this->grants()
+    protected function _recursive_roles($roles_array, $extended_roles = [])
+    {
+        $allowed = [];
+
+        if ( ! is_array($extended_roles))
+        {
+            return $allowed;
+        }
+
+        $allowed = array_merge($allowed, $extended_roles);
+
+        foreach ($extended_roles as $role)
+        {
+            $allowed = array_merge($allowed, $this->_recursive_roles($roles_array, $roles_array[$role]));
+        }
+
+        return $allowed;
+    }
 }
